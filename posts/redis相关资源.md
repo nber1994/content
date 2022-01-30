@@ -1,7 +1,7 @@
 --- 
 title: redis相关资源 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
 # redis相关资源

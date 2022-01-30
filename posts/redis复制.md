@@ -1,10 +1,9 @@
 --- 
 title: redis复制 
 date: 2019-08-09
-tags: 
+categories: 
 - redis 
 ---
-# redis复制
 - redis通过slaveof命令，放一个服务器去复制另一个服务器，一个为主服务器，另一个为从服务器
 - 主从服务器保存相同的数据称为一致
 ## 旧版本的复制实现

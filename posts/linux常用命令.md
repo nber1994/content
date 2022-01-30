@@ -1,16 +1,9 @@
 --- 
 title: linux常用命令 
-date: 2019-06-02
-tags: 
-- else 
+date: 2019-06-03
+categories: 
+- linux
 ---
---- 
-title: linux常用命令 
-date: 2019-06-02
-tags: 
-- else 
----
-# linux常用命令
 # top
 
 ```c

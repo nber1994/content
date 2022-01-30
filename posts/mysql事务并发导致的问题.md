@@ -1,7 +1,7 @@
 ---
 title: mysql事务并发导致的问题
 date: 2017-10-20
-tags: 
+categories: 
 - mysql
 ---
 > 胡乱探讨了事务并发的问题与处理方法

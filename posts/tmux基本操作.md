@@ -1,7 +1,7 @@
 ---
 title: tmux简单操作
 date: 2018-04-16
-tags: 
+categories: 
 - tools
 ---
 > 简单记录一下tmux的应用

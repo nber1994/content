@@ -1,7 +1,7 @@
 ---
 title: lsp配置相关
 date: 2020-11-23
-tags: 
+categories: 
 - vim
 ---
 

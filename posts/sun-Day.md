@@ -1,7 +1,7 @@
 ---
-title: pic-阳光明媚的一天
+title: sunday
 date: 2018-12-11
-tags: 
+categories: 
 - pic
 ---
 

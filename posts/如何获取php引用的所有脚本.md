@@ -1,7 +1,7 @@
 ---
 title: 如何获取php引用的所有脚本
 date: 2020-11-24
-tags: 
+categories: 
 - php
 ---
 

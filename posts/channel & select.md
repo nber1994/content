@@ -1,8 +1,8 @@
 ---
 title: channel & selelct
 date: 2020-11-23
-tags: 
-- pic
+categories: 
+- go
 ---
 
 

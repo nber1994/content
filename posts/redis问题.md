@@ -1,7 +1,7 @@
 --- 
 title: redis问题 
 date: 2019-08-09
-tags: 
+categories: 
 - redis 
 ---
 # redis-问题

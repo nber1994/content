@@ -1,10 +1,10 @@
 --- 
 title: redis事件 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
-# redis事件
+
 > redis是一个事件驱动程序
 
 - 他需要处理两类事件

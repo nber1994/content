@@ -1,8 +1,8 @@
 ---
 title: "shell常用的文本处理命令"
 date: 2017-10-27
-tags: 
-- shell
+categories: 
+- linux
 ---
 > 先挖个坑,还未完成
 

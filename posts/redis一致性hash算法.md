@@ -1,7 +1,7 @@
 --- 
 title: redis一致性hash算法 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
 # redis-一致性hash算法

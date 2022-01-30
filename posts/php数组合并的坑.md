@@ -1,7 +1,7 @@
 ---
 title: php数组合并的坑
 date: 2017-10-24
-tags: 
+categories: 
 - php
 ---
 > 胡乱记录了php合并数组时遇到的坑

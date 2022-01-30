@@ -1,7 +1,7 @@
 ---
 title: my配色
 date: 2020-11-23
-tags: 
+categories: 
 - vim
 ---
 

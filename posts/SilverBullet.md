@@ -1,11 +1,10 @@
 --- 
 title: SilverBullet 
 date: 2020-07-09
-tags: 
+categories: 
 - else 
 ---
-# SilverBullet
-## mysql
+# mysql
 1. 讲一讲myisam和innodb的区别
     1. 锁
     2. 事务
@@ -56,7 +55,7 @@ tags:
 21. 你是怎么优化sql的
 > [sql军规](http://nber1994.com/mysql/2019/01/08/mysql-查询优化器&sql军规.html)
 
-## redis
+# redis
 1. redis为什么这么快
     1. 基于内存
     2. IO多路复用
@@ -94,7 +93,7 @@ tags:
     2. 定期回收
 17. redis的pub和sub
 
-## 网络
+# 网络
 1. tcp和udp的区别以及适用的场景
 2. tcp的三次握手，四次挥手
 3. tcp如何保证可靠性
@@ -102,7 +101,7 @@ tags:
 5. tcp的慢启动
 6. IOS七层模型，分别的作用和协议
 
-## 操作系统
+# 操作系统
 1. 进程和线程的区别
 2. 进程fork子进程时，发生了什么操作
 3. copy on write机制
@@ -110,7 +109,7 @@ tags:
 > [虚拟内存](http://nber1994.com/os/2019/05/18/os-虚拟内存.html)
 
 
-## 系统设计
+# 系统设计
 
 1. 布隆过滤器
 > [布隆过滤器](http://nber1994.com/sysdesign/2019/01/10/sysDesign-布隆过滤器.html)
@@ -126,7 +125,7 @@ tags:
 7. 分布式锁
 > [分布式锁](https://zhuanlan.zhihu.com/p/41114567)
 
-## 算法
+# 算法
 1. 剑指offer
 > [剑指offer](https://blog.csdn.net/c406495762/article/details/79247243)
 2. leetcode 链表 数组 二叉树 图 dp

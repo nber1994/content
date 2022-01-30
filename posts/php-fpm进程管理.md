@@ -1,7 +1,7 @@
 --- 
 title: php-fpm进程管理 
 date: 2019-08-09
-tags: 
+categories: 
 - php 
 ---
 # php-fpm进程管理

@@ -1,18 +1,17 @@
 --- 
 title: redis数据结构-跳跃表 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
-# redis数据结构-跳跃表
 - 跳跃表通过每个节点位置多个指向其他节点的指针来实现快速访问
 - 跳跃表可以实现最好O(logN)，最坏O(N)的节点查找，同时可以顺序操作批量处理
 - redis的应用，一个是在有序集合中使用了跳跃表，同时在集群节点中作为内部数据结构使用
 
-## 结构
+# 结构
 跳跃表由zskiplistNode和zskiplist结构组成
 ![](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/20181116215118081_834546591.png)
-### 对于跳跃表结构:
+## 对于跳跃表结构:
 ```c
 typedef strut zskiplist {
     //表头节点和表尾节点
@@ -27,7 +26,7 @@ typedef strut zskiplist {
 - level：跳跃表中level最大的level值，不包括表头结点
 - length：跳跃表中包含节点的个数，不包含表头
 
-### 对于跳跃表节点结构：
+## 对于跳跃表节点结构：
 ```c
 typedef struct zskiplistNode {
     //层
@@ -53,5 +52,5 @@ typedef struct zskiplistNode {
 - 注意：头节点同样存在后退指针，分值和成员对象，但是一般不使用
 - 注意：当节点的score值相同时，但是成员变量不能重复，会按照成员对象在字典中的大小进行排序
 
-## 重点回顾
+# 重点回顾
 ![](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/20181117154357647_1008856380.png)

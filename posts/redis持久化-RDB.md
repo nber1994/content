@@ -1,7 +1,7 @@
 --- 
 title: redis持久化-RDB 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
 > redis持久化-RDB

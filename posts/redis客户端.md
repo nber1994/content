@@ -1,10 +1,10 @@
 --- 
 title: redis客户端 
 date: 2019-08-09
-tags: 
+categories: 
 - redis 
 ---
-# redis客户端和服务器
+
 # 客户端
 - redis服务器中，保存着clients链表
 ```c

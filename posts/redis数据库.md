@@ -1,10 +1,9 @@
 --- 
 title: redis数据库 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
-# redis数据库
 
 ```c
 struct redisServer {

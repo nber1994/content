@@ -1,7 +1,7 @@
 ---
 title: vim无插件编程技巧
 date: 2017-12-13
-tags: 
+categories: 
 - vim
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: InnoDB各类语句的加锁方式与应用
 date: 2017-10-20
-tags: 
+categories: 
 - mysql
 ---
 > 胡乱探讨了mysql的InnoDB的简单的加锁机制与使用场景，同时也有加锁等级

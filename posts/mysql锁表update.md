@@ -1,7 +1,7 @@
 ---
 title: mysql锁表for update
 date: 2017-10-20
-tags: 
+categories: 
 - mysql
 ---
 > 胡乱探讨了for update的语句应用与使用场景

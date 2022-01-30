@@ -1,10 +1,9 @@
 --- 
 title: redis集群 
 date: 2019-01-08
-tags: 
+categories: 
 - redis 
 ---
-# redis集群
 - redis集群通过分片来进行数据共享，并且提供复制和故障转移的功能
 # 节点
 - 一个集群是由多个节点组成

@@ -1,7 +1,7 @@
 ---
 title: 如何基于github pages搭建blog
 date: 2017-12-06
-tags: 
+categories: 
 - tools
 ---
 > 胡乱的记载了如何在github-pages搭建bolg
@@ -69,9 +69,9 @@ drwxr-xr-x@  6 jingtianyou  staff   204B  9 18 07:47 categories
 ---
 title: InnoDB各类语句的加锁方式与应用
 date: 2017-12-06
-tags:
+categories:
 - mysql
-tags: 
+categories: 
 - lnmp
 ---
 ...

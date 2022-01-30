@@ -1,7 +1,7 @@
 --- 
 title: questions 
 date: 2019-08-09
-tags: 
+categories: 
 - else 
 ---
 # Questions

@@ -1,7 +1,7 @@
 ---
 title: lnmp报错too-big-header错误探究
 date: 2018-01-08
-tags: 
+categories: 
 - php
 ---
 

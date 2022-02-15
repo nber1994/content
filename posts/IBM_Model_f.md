@@ -1,10 +1,12 @@
 ---
-title: IBM_Model_f 
+title: IBM Model f 
 date: 2020-07-09
 categories: 
 - pic 
+tags:
+- daily
+
 ---
-# pic-IBM_Model_f
 
 新入手IBM Model f键盘
 产于1989年

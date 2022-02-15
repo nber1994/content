@@ -3,6 +3,8 @@ title: questions
 date: 2019-08-09
 categories: 
 - else 
+tags:
+- summary
 ---
 # Questions
 # OS

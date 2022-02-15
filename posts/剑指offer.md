@@ -1,11 +1,57 @@
---- 
+---
 title: 剑指offer 
 date: 2019-08-09
 categories: 
 - leetcode 
 ---
-> 题目列表，当做一个速查列表好了，具体代码就不放了:P
-# 链表-8道：
+> 题目列表，当做一个速查列表好了
+# 链表-8道
+
+[剑指 Offer 06. 从尾到头打印链表](https://leetcode-cn.com/problems/cong-wei-dao-tou-da-yin-lian-biao-lcof/)
+
+````go
+//递归打印
+package reverse_print
+
+/**
+ * Definition for singly-linked list.
+ * type ListNode struct {
+ *     Val int
+ *     Next *ListNode
+ * }
+ */
+
+type ListNode struct {
+	Val  int
+	Next *ListNode
+}
+
+func ReversePrint(head *ListNode) []int {
+	var res []int
+	ReversePrintRecv(head, &res)
+	return res
+}
+
+func ReversePrintRecv(head *ListNode, res *[]int) {
+	if head != nil {
+		ReversePrintRecv(head.Next, res)
+		*res = append(*res, head.Val)
+	}
+}
+````
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 剑指Offer（三）：从尾到头打印链表
 # 剑指Offer（十四）：链表中倒数第k个结点
 # 剑指Offer（十五）：反转链表
@@ -19,7 +65,7 @@ categories:
 ![](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/20190602183040563_1940658650.png)
 * 方法一：
     * 我们可以把两个链表拼接起来，一个pHead1在前pHead2在后，一个pHead2在前pHead1在后。这样，生成了两个相同长度的链表，那么我们只要同时遍历这两个表，就一定能找到公共结点。时间复杂度O(m+n)，空间复杂度O(m+n)。
-![](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/20190602184139386_668299914.png)
+    ![](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/20190602184139386_668299914.png)
 * 方法二：
     * 我们也可以先让把长的链表的头砍掉，让两个链表长度相同，这样，同时遍历也能找到公共结点。此时，时间复杂度O(m+n)，空间复杂度为O(MAX(m,n))。
 

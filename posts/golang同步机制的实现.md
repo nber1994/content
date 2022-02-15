@@ -28,7 +28,7 @@ categories:
 
   Golang中的自旋锁用来实现其他类型的锁，自旋锁的作用和互斥量类似，不同点在于， 它不是通过休眠来使进程阻塞，而是在获得锁之前一直处于忙等状态（自旋），从而避免了进程（或者
 
-  和自旋锁相关的函数有sync_runtime_canSpin和sync_runtime_doSpin， 前者用来判断当前是否可以进行自旋，后者执行自旋操作。二者通常一起使用。
+ 和自旋锁相关的函数有sync_runtime_canSpin和sync_runtime_doSpin， 前者用来判断当前是否可以进行自旋，后者执行自旋操作。二者通常一起使用。
 
   sync_runtime_canSpin函数中在以下四种情况返回false
 

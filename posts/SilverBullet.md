@@ -3,6 +3,8 @@ title: SilverBullet
 date: 2020-07-09
 categories: 
 - else 
+tags:
+- summary
 ---
 # mysql
 1. 讲一讲myisam和innodb的区别

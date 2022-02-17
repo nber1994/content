@@ -650,8 +650,8 @@ type hchan struct {
 	elemtype *_type // 元素类型
 	sendx    uint   // 发送的索引
 	recvx    uint   // 接受索引
-  	recvq    waitq  // recv 等待队列 (<-chane)
-  	sendq    waitq  // send 等待列表 (chan<-)
+  recvq    waitq  // recv 等待队列 (<-chane)
+  sendq    waitq  // send 等待列表 (chan<-)
 
 	lock mutex //锁
 }
@@ -875,11 +875,28 @@ func makechan(t *chantype, size int) *hchan {
 
 ## 发送
 
-```
+```go
 ch <- v                      ⇒ runtime.chansend1(ch, &v)
 ```
 
+### buffered channel
 
+####  1.buffer not full
+
+![image-20220217010608085](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021701060808520220217010608.png)
+
+1. 加锁
+2. 将元素拷贝至buffer中，并更新sendx
+3. 解锁
+
+#### 2.buffer full
+
+![image-20220217012739394](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021701273939420220217012739.png)
+
+1. 加锁
+2. 将当前g和元素打包为sudog，并且加入sendq队列
+3. 将当前g与m分离，m继续进入调度，g则挂起等待
+4. 解锁
 
 
 

@@ -1,6 +1,6 @@
 ---
-title: channel & selelct
-date: 2020-11-23
+title: golang channel浅析
+date: 2022-02-17
 categories: 
 - go
 ---
@@ -432,7 +432,66 @@ close(ch)
 
 Tips：
 
-只有在需要通知接收方所有数据已经发送完毕时，才需要显式的调用close函数关闭chan，除此之外，若不对channel进行关闭操作，它是可以被垃圾回收机制回收的，**关闭通道不是必须的**
+只有在需要通知接收方所有数据已经发送完毕时，才需要显式的调用close函数关闭chan，除此之外，若不对channel进行关闭操作，它是可以被垃圾回收机制回收的，**关闭通道不是必须的**。
+
+通道关闭时：
+
+- sendq中的sender会panic 
+- recvq中的reciver会返回类型零值
+
+```go
+func main() {
+	ch := make(chan int, 1)
+
+	go func() {
+		for i := 0; i < 100; i++ {
+			ch <- i
+		}
+	}()
+
+	<-time.After(2 * time.Second)
+
+	go func() {
+		close(ch)
+	}()
+
+	<-time.After(1 * time.Second)
+}
+
+//% go run main.go
+//panic: send on closed channel
+//
+//goroutine 4 [running]:
+//main.main.func1(0x1400006e000)
+//	/Users/didi/work/src/my/test/test/main.go:15 +0x40
+//created by main.main
+//	/Users/didi/work/src/my/test/test/main.go:13 +0x54
+//exit status 2
+
+
+
+func main() {
+	ch := make(chan int, 1)
+
+	go func() {
+		v := <-ch
+		fmt.Println(v)
+	}()
+
+	<-time.After(2 * time.Second)
+
+	go func() {
+		close(ch)
+	}()
+
+	<-time.After(1 * time.Second)
+}
+
+//$ go run main.go
+//0
+```
+
+
 
 通道关闭后：
 
@@ -879,9 +938,20 @@ func makechan(t *chantype, size int) *hchan {
 ch <- v                      ⇒ runtime.chansend1(ch, &v)
 ```
 
-### buffered channel
+### 场景拆分
 
-####  1.buffer not full
+#### 1.buffer not full & has reciver
+
+![image-20220217114037877](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021711403787720220217114038.png)
+
+1. 加锁
+2. recvq不为空，则直接将元素拷贝到recvq的对头元素中
+3. reciver出队，重新进入调度队列中
+4. 解锁
+
+这里就不需要死板的先将元素存入缓存然后再拷贝给reciver了，直接将元素拷贝给reciver。
+
+####  2.buffer not full
 
 ![image-20220217010608085](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021701060808520220217010608.png)
 
@@ -889,26 +959,300 @@ ch <- v                      ⇒ runtime.chansend1(ch, &v)
 2. 将元素拷贝至buffer中，并更新sendx
 3. 解锁
 
-#### 2.buffer full
+#### 3.buffer full
 
-![image-20220217012739394](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021701273939420220217012739.png)
+![image-20220217114446528](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021711444652820220217114446.png)
 
 1. 加锁
 2. 将当前g和元素打包为sudog，并且加入sendq队列
 3. 将当前g与m分离，m继续进入调度，g则挂起等待
 4. 解锁
 
+这种情况不再进行自旋了，直接进入休眠。这里可以对比下mutex的实现，先cas操作，失败则先进行自旋，自旋几次还没拿到锁的话，再进行休眠。
+
+所以channel对于阻塞的G是公平的，按照FIFO的顺序进行，而mutex则不然，越新的请求越容易拿到锁。
+
+
+
+### 源码
+
+```go
+func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+	//先进行一堆繁琐的检查
+    ...
+    
+    //加锁
+	lock(&c.lock)
+	
+    // 不允许向已经 close 的 channel 发送数据 否则panic
+	if c.closed != 0 { 
+		unlock(&c.lock)
+		panic(plainError("send on closed channel"))
+	}
+
+	// 1. 找到了阻塞在 channel 上的 reciver，发送
+	if sg := c.recvq.dequeue(); sg != nil {
+		// Found a waiting receiver. We pass the value we want to send
+		// directly to the receiver, bypassing the channel buffer (if any).
+		send(c, sg, ep, func() { unlock(&c.lock) }, 3) //其中第四个入参是执行成功的回调函数
+		return true
+	}
+
+	// 2. 判断 channel 中缓存是否仍然有空间剩余
+	if c.qcount < c.dataqsiz {
+		// Space is available in the channel buffer. Enqueue the element to send.
+		// 有空间剩余，入队 因为是内存操作，可以简单的理解为buf[sendx] = elem
+		qp := chanbuf(c, c.sendx)
+		if raceenabled {
+			racereleaseacquire(qp)
+		}
+		typedmemmove(c.elemtype, qp, ep)
+        
+        //更新游标，并且进行掉头操作
+		c.sendx++
+		if c.sendx == c.dataqsiz {
+			c.sendx = 0
+		}
+		c.qcount++
+		unlock(&c.lock)
+		return true
+	}
+
+	if !block {
+		unlock(&c.lock)
+		return false
+	}
+
+	// Block on the channel. Some receiver will complete our operation for us.
+	// 3. 阻塞在 channel 上，等待接收方接收数据
+	gp := getg()
+	mysg := acquireSudog()
+	mysg.releasetime = 0
+	if t0 != 0 {
+		mysg.releasetime = -1
+	}
+	// No stack splits between assigning elem and enqueuing mysg
+	// on gp.waiting where copystack can find it.
+	mysg.elem = ep
+	mysg.waitlink = nil
+	mysg.g = gp
+	mysg.isSelect = false
+	mysg.c = c
+	gp.waiting = mysg
+	gp.param = nil
+	c.sendq.enqueue(mysg)
+	// Signal to anyone trying to shrink our stack that we're about
+	// to park on a channel. The window between when this G's status
+	// changes and when we set gp.activeStackChans is not safe for
+	// stack shrinking.
+	atomic.Store8(&gp.parkingOnChan, 1)
+	gopark(chanparkcommit, unsafe.Pointer(&c.lock), waitReasonChanSend, traceEvGoBlockSend, 2) // 将当前的 g 从调度队列移出
+	// 因为调度器在停止当前 g 的时候会记录运行现场，当恢复阻塞的发送操作时候，会从此处继续开始执行
+	// Ensure the value being sent is kept alive until the
+	// receiver copies it out. The sudog has a pointer to the
+	// stack object, but sudogs aren't considered as roots of the
+	// stack tracer.
+	KeepAlive(ep)
+
+	// someone woke us up.
+	// 被唤醒
+	if mysg != gp.waiting {
+		throw("G waiting list is corrupted")
+	}
+	gp.waiting = nil
+	gp.activeStackChans = false
+	closed := !mysg.success
+	gp.param = nil
+	if mysg.releasetime > 0 {
+		blockevent(mysg.releasetime-t0, 2)
+	}
+	mysg.c = nil
+	releaseSudog(mysg)
+	if closed {
+		// 正常唤醒状态，goroutine 应该包含需要传递的参数，但如果没有唤醒时的参数，且 channel 没有被关闭，则为虚假唤醒
+		if c.closed == 0 {
+			throw("chansend: spurious wakeup")
+		}
+		panic(plainError("send on closed channel"))
+	}
+	return true
+}
+
+func send(c *hchan, sg *sudog, ep unsafe.Pointer, unlockf func(), skip int) {
+	//竞争检测
+    ...
+    
+	if sg.elem != nil {
+		sendDirect(c.elemtype, sg, ep)
+		sg.elem = nil
+	}
+	gp := sg.g
+	unlockf()
+	gp.param = unsafe.Pointer(sg)
+	sg.success = true
+	if sg.releasetime != 0 {
+		sg.releasetime = cputicks()
+	}
+	// 放入调度队列等待被后续调度
+	// 第二个参数用于 trace 追踪 ip 寄存器的位置，go runtime 又不希望暴露太多内部的调用，因此记录需要跳过多少 ip
+	goready(gp, skip+1)
+}
+```
+
+可以看到，在发送操作时，
+
+1. 会先检测等待队列中是否为空，如果不为空则直接将元素拷贝到reciver中，并且唤醒reciver（等待队列不为空则说明buf一定为空）
+2. 检测buf是否存在且未满，则将元素加入缓存 & 更新游标
+3. 否则进入休眠，调用gopark函数，将G与M分离，M重新进入调度器寻找P要G
+
+
+
 
 
 ## 接受
 
-```
+```go
 v := <- ch                   ⇒ runtime.chanrecv1(ch, &v)
-
-   v, ok := <- ch               ⇒ ok := runtime.chanrecv2(ch, &v)
+v, ok := <- ch               ⇒ ok := runtime.chanrecv2(ch, &v)
 ```
 
+### 场景拆分
 
+#### 1.buf not empty
+
+![image-20220217122203713](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021712220371320220217122203.png)
+
+1. 加锁
+2. 拷贝buf[recvx]到reciver
+3. 更新recvx
+4. 解锁
+
+
+
+#### 2.sendq not empty
+
+
+
+
+
+![image-20220217121159830](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021712115983020220217121200.png)
+
+1. 加锁
+2. sendq队头是否为空，不为空则直接将sender的数据拷贝给reciver，并且唤醒sender
+3. 解锁
+
+**这里不首先接收buf中的元素，而是直接去接收了等待发送队列中的元素，这么做是为了优先将阻塞的G接触阻塞，毕竟buf中元素的sender此时都处于非阻塞状态。**
+
+#### 3.sendq empty & buf empty
+
+![image-20220217122758538](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021712275853820220217122758.png)
+
+1. 加锁
+2. 将G打包为sudog，加入到等待队列队尾
+3. G与M解锁，G调用gopark函数进入休眠
+4. 解锁
+
+### 源码
+
+```go
+func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool) {
+	//复杂枯燥的检查
+	...
+    
+	lock(&c.lock)
+	// 1. channel 已经 close，且 channel 中没有数据，则直接返回
+	if c.closed != 0 && c.qcount == 0 {
+		if raceenabled {
+			raceacquire(c.raceaddr())
+		}
+		unlock(&c.lock)
+		if ep != nil {
+			typedmemclr(c.elemtype, ep)
+		}
+		return true, false
+	}
+	// 2. 找到发送方，直接接收
+	if sg := c.sendq.dequeue(); sg != nil {
+		// Found a waiting sender. If buffer is size 0, receive value
+		// directly from sender. Otherwise, receive from head of queue
+		// and add sender's value to the tail of the queue (both map to
+		// the same buffer slot because the queue is full).
+		recv(c, sg, ep, func() { unlock(&c.lock) }, 3)
+		return true, true
+	}
+	// 3. channel 的 buf 不空
+	if c.qcount > 0 {
+		// Receive directly from queue
+		qp := chanbuf(c, c.recvx)
+		if raceenabled {
+			racereleaseacquire(qp)
+		}
+		if ep != nil {
+			typedmemmove(c.elemtype, ep, qp)
+		}
+		typedmemclr(c.elemtype, qp)
+		c.recvx++
+		if c.recvx == c.dataqsiz {
+			c.recvx = 0
+		}
+		c.qcount--
+		unlock(&c.lock)
+		return true, true
+	}
+
+	if !block {
+		unlock(&c.lock)
+		return false, false
+	}
+
+	// no sender available: block on this channel.
+	// 4. 没有更多的发送方，阻塞 channel
+	gp := getg()
+	mysg := acquireSudog()
+	mysg.releasetime = 0
+	if t0 != 0 {
+		mysg.releasetime = -1
+	}
+	// No stack splits between assigning elem and enqueuing mysg
+	// on gp.waiting where copystack can find it.
+	mysg.elem = ep
+	mysg.waitlink = nil
+	gp.waiting = mysg
+	mysg.g = gp
+	mysg.isSelect = false
+	mysg.c = c
+	gp.param = nil
+	c.recvq.enqueue(mysg)
+	// Signal to anyone trying to shrink our stack that we're about
+	// to park on a channel. The window between when this G's status
+	// changes and when we set gp.activeStackChans is not safe for
+	// stack shrinking.
+	atomic.Store8(&gp.parkingOnChan, 1)
+	gopark(chanparkcommit, unsafe.Pointer(&c.lock), waitReasonChanReceive, traceEvGoBlockRecv, 2)
+
+	// someone woke us up
+	// 唤醒
+	if mysg != gp.waiting {
+		throw("G waiting list is corrupted")
+	}
+	gp.waiting = nil
+	gp.activeStackChans = false
+	if mysg.releasetime > 0 {
+		blockevent(mysg.releasetime-t0, 2)
+	}
+	success := mysg.success
+	gp.param = nil
+	mysg.c = nil
+	releaseSudog(mysg)
+	return true, success
+}
+```
+
+可以看到，在接收操作时，
+
+1. 首先看等待发送队列是否为空，如果不为空则优先将数据拷贝给阻塞的sender（减少G的阻塞时间）
+2. 再看buf是否为空，不为空则从buf中接收
+3. 如果都为空，则将当前G打包为sudog加入接收等待队列中
 
 
 
@@ -916,24 +1260,172 @@ v := <- ch                   ⇒ runtime.chanrecv1(ch, &v)
 
 ```
 close(ch)                    ⇒ runtime.closechan(ch)
+```
 
+### 场景拆分
+
+**根据send和recive的行为，我们知道不会存在sendq和recvq同时不为空的情况**
+
+#### 1.recvq not empty
+
+![image-20220217151659373](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021715165937320220217151659.png)
+
+1. 加锁
+2. 更改close状态
+3. 将recvq中的sudog加入到glist中
+4. 解锁
+5. 依次将glist中的sudog唤醒，每个唤醒的G会返回元素零值
+
+之所以先将recvq迁移到glist之后就进行解锁，是为了减少加锁的临界区
+
+#### 2.sendq not empty
+
+![image-20220217151837658](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021715183765820220217151837.png)
+
+1. 加锁
+2. 更改close状态
+3. 将sendq中的sudog加入到glist中
+4. 解锁
+5. 依次将glist中的sudog唤醒，每个唤醒的G会直接报panic
+
+
+
+### 源码
+
+```go
+func closechan(c *hchan) {
+	//关闭空chan会panic
+    if c == nil {
+		panic(plainError("close of nil channel"))
+	}
+
+    //加锁
+	lock(&c.lock)
+    
+    //多次close panic
+	if c.closed != 0 {
+		unlock(&c.lock)
+		panic(plainError("close of closed channel"))
+	}
+
+	c.closed = 1
+
+	var glist gList
+
+	// release all readers
+	// 释放所有的读者
+	for {
+		sg := c.recvq.dequeue()
+		if sg == nil {
+			break
+		}
+		if sg.elem != nil {
+			typedmemclr(c.elemtype, sg.elem)
+			sg.elem = nil
+		}
+		if sg.releasetime != 0 {
+			sg.releasetime = cputicks()
+		}
+		gp := sg.g
+		gp.param = unsafe.Pointer(sg)
+		sg.success = false
+		if raceenabled {
+			raceacquireg(gp, c.raceaddr())
+		}
+		glist.push(gp)
+	}
+
+	// release all writers (they will panic)
+	// 释放所有的写者 (panic)
+	for {
+		sg := c.sendq.dequeue()
+		if sg == nil {
+			break
+		}
+		sg.elem = nil
+		if sg.releasetime != 0 {
+			sg.releasetime = cputicks()
+		}
+		gp := sg.g
+		gp.param = unsafe.Pointer(sg)
+		sg.success = false
+		if raceenabled {
+			raceacquireg(gp, c.raceaddr())
+		}
+		glist.push(gp)
+	}
+	unlock(&c.lock)
+
+	// Ready all Gs now that we've dropped the channel lock.
+	// 就绪所有的 G 即可释放 channel 锁
+	for !glist.empty() {
+		gp := glist.pop()
+		gp.schedlink = 0
+		goready(gp, 3)
+	}
+}
 ```
 
 
 
+我们再回头看看close后，sender和reciver被唤醒之后的代码
 
+```go
+//sender
+	....
+	gopark(chanparkcommit, unsafe.Pointer(&c.lock), waitReasonChanSend, traceEvGoBlockSend, 2) // 将当前的 g 从调度队列移出
+	// 因为调度器在停止当前 g 的时候会记录运行现场，当恢复阻塞的发送操作时候，会从此处继续开始执行
+	// Ensure the value being sent is kept alive until the
+	// receiver copies it out. The sudog has a pointer to the
+	// stack object, but sudogs aren't considered as roots of the
+	// stack tracer.
+	KeepAlive(ep)
 
-# select
+	// someone woke us up.
+	// 被唤醒
+	if mysg != gp.waiting {
+		throw("G waiting list is corrupted")
+	}
+	gp.waiting = nil
+	gp.activeStackChans = false
+	closed := !mysg.success
+	gp.param = nil
+	if mysg.releasetime > 0 {
+		blockevent(mysg.releasetime-t0, 2)
+	}
+	mysg.c = nil
+	releaseSudog(mysg)
+	if closed {
+		// 正常唤醒状态，goroutine 应该包含需要传递的参数，但如果没有唤醒时的参数，且 channel 没有被关闭，则为虚假唤醒
+		if c.closed == 0 {
+			throw("chansend: spurious wakeup")
+		}
+		panic(plainError("send on closed channel")) //直接报panic
+	}
+	return true
+}
 
-## 分类
+//reciver
+	...
+	gopark(chanparkcommit, unsafe.Pointer(&c.lock), waitReasonChanReceive, traceEvGoBlockRecv, 2)
 
-zero-case
-
-uni-case
-
-muilt-case
-
-多个case，上一个case执行过程中，下一个case的chan有数据来了的话，会怎么做
+	// someone woke us up
+	// 唤醒
+	if mysg != gp.waiting {
+		throw("G waiting list is corrupted")
+	}
+	gp.waiting = nil
+	gp.activeStackChans = false
+	if mysg.releasetime > 0 {
+		blockevent(mysg.releasetime-t0, 2)
+	}
+	success := mysg.success
+	gp.param = nil
+	mysg.c = nil
+	releaseSudog(mysg)
+	return true, success
+}
+```
 
 
 
@@ -941,9 +1433,9 @@ muilt-case
 
 # 扩展
 
-### 如何实现一个无线长度的channel
+- 如何实现一个无线长度的channel
 
-### 如何实现一个lock free的channel （乐观锁）
+- 如何实现一个lock free的channel （乐观锁）
 
-### 实现一个元素不定长的ring buffer
+- 实现一个元素不定长的ring buffer
 

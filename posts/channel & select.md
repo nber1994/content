@@ -412,7 +412,7 @@ select {
 
 ```go
 select {
-	case a = ch1:
+    case a := <- ch1:
 		xxxx
 	case ch2 <- b:
 		xxx
@@ -510,11 +510,11 @@ func main() {
 
 > don't close a channel from the receiver side and don't close a channel if the channel has multiple concurrent senders.
 
-**不要从recvier一侧去关闭channel，更不要存在多个sender时去关闭channel。**
+**不要从recvier一侧去关闭channel，更不要存在多个sender时去关闭channel（需要一个协调者）。**
 
 首先我们看下如何判断chan是否已经关闭了呢
 
-#### 1.判断channel是否已经关闭
+#### 1.reciver判断channel是否已经关闭
 
 ```go
 func main() {
@@ -545,7 +545,7 @@ func main() {
 }
 ```
 
-
+那么sender如何关闭channel呢？
 
 #### 2.不那么优雅的关闭方法
 
@@ -554,7 +554,7 @@ func main() {
 
 #### 3.优雅的关闭方法
 
-**事件同步机制进行关闭**
+**事件同步机制进行关闭**，分为如下情况：
 
 1. 1sender 1reciver
 2. 1sender Nreciver
@@ -567,6 +567,8 @@ func main() {
 //使用
 func main() {
 	ch := make(chan int)
+    
+    //sender
 	go func() {
 		for i := 0; i < 100; i++ {
 			ch <- i
@@ -574,6 +576,7 @@ func main() {
 		close(ch)
 	}()
 
+    //reciver
 	go func() {
 		for {
 			i, ok := <-ch
@@ -584,6 +587,7 @@ func main() {
 		}
 	}()
 
+    //reciver
 	go func() {
 		for {
 			i, ok := <-ch
@@ -601,7 +605,7 @@ func main() {
 
 ```
 
-针对3，4 我们可以配合context，当reciver接受完成后，通知sender关闭后再讲channel关闭
+针对3，4 我们可以构建一个协调者，配合context关闭，当reciver接受完成后，通知sender全部退出后再将channel关闭
 
 ![image-20220216211230086](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021621123008620220216211230.png)
 
@@ -609,8 +613,9 @@ func main() {
 func main() {
 	ch := make(chan int, 100)
 
-	ctx1, cancel1 := context.WithCancel(context.TODO())
-	ctx2 := context.WithValue(ctx1, struct{}{}, struct{}{})
+	ctx, cancel := context.WithCancel(context.TODO())
+	ctx1 := context.WithValue(ctx, struct{}{}, struct{}{})
+    ctx2 := context.WithValue(ctx, struct{}{}, struct{}{})
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
@@ -646,7 +651,7 @@ func main() {
 		}
 
 		//关闭所有的sender
-		cancel1()
+		cancel()
 		wg.Wait()
 		close(ch)
 	}()
@@ -709,8 +714,8 @@ type hchan struct {
 	elemtype *_type // 元素类型
 	sendx    uint   // 发送的索引
 	recvx    uint   // 接受索引
-  recvq    waitq  // recv 等待队列 (<-chane)
-  sendq    waitq  // send 等待列表 (chan<-)
+  	recvq    waitq  // recv 等待队列 (<-chane)
+  	sendq    waitq  // send 等待列表 (chan<-)
 
 	lock mutex //锁
 }
@@ -722,7 +727,7 @@ type hchan struct {
 
 buf作为channel的缓冲区，他是一个环形的ringbuffer。
 
-为什么使用ringbuffer来存元素？首先，我们需要实现一个FIFO的队列，那么第一反应是链表，新增和删除节点都是O(1)，那么如果使用链表会遇到什么问题呢？
+为什么使用ringbuffer来存元素？首先，**我们需要实现一个FIFO的队列**，那么第一反应是链表，新增和删除节点都是O(1)，那么如果使用链表会遇到什么问题呢？
 
 1. send操作时，需要重新分配内存创建一个链表节点。
 2. recv操作时，recv后的链表节点需要GC去识别与回收内存。
@@ -745,6 +750,8 @@ buf作为channel的缓冲区，他是一个环形的ringbuffer。
 
 
 ![image-20220216212406511](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021621240651120220216212406.png)
+
+![image-20220217171539592](https://cdn.jsdelivr.net/gh/nber1994/fu0k@master/uPic/image-2022021717153959220220217171539.png)
 
 
 
@@ -805,7 +812,6 @@ func recv(c *hchan) int {
 	}
 	c.qcount--
 	return v
-
 }
 
 ```
@@ -861,8 +867,6 @@ type sudog struct {
 
 
 
-<img src="http://tonybai.com/wp-content/uploads/goroutine-scheduler-model.png" alt="img{512x368}" style="zoom:50%;" />
-
 ## 创建
 
 ```go
@@ -873,21 +877,9 @@ make(chan interface{})       ⇒ runtime.makechan(interface{}, 0)
 
 ```go
 func makechan(t *chantype, size int) *hchan {
-	elem := t.elem
-
-	// compiler checks this but be safe.
-	if elem.size >= 1<<16 {
-		throw("makechan: invalid channel element type")
-	}
-	if hchanSize%maxAlign != 0 || elem.align > maxAlign {
-		throw("makechan: bad alignment")
-	}
-
-	mem, overflow := math.MulUintptr(elem.size, uintptr(size))
-	if overflow || mem > maxAlloc-hchanSize || size < 0 {
-		panic(plainError("makechan: size out of range"))
-	}
-
+	//无聊的检查
+    ...
+    
     //可恶的GC，我们先不用关心这块逻辑
 	// Hchan does not contain pointers interesting for GC when elements stored in buf do not contain pointers.
 	// buf points into the same allocation, elemtype is persistent.
@@ -1180,6 +1172,7 @@ func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool)
 		recv(c, sg, ep, func() { unlock(&c.lock) }, 3)
 		return true, true
 	}
+    
 	// 3. channel 的 buf 不空
 	if c.qcount > 0 {
 		// Receive directly from queue
@@ -1433,7 +1426,7 @@ func closechan(c *hchan) {
 
 # 扩展
 
-- 如何实现一个无线长度的channel
+- 如何实现一个无限长度的channel
 
 - 如何实现一个lock free的channel （乐观锁）
 
